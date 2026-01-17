@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OrganizePro</title>
+  <meta name="description" content="Feature-rich single-file To-Do app: add/edit tasks, due dates, priority, tags, drag-reorder, export/import, theme toggle, localStorage" />
+ <style>
+  :root{
+    --bg: linear-gradient(180deg, #0c0f1e 0%, #0a112d 50%, #060713 100%);
+    --card: linear-gradient(180deg, #1a1e33, #121527);
+    --accent: #8254ff;
+    --accent-2: #6734ff;
+    --success:#10b981;
+    --danger:#ef4444;
+    --glass: rgba(255,255,255,0.05);
+    --muted: #9aa6bf;
+    --text: #e6eef8;
+    --radius:12px;
+    --shadow: 0 10px 30px rgba(2,6,23,0.6);
+    color-scheme: dark;
+  }
+
+  /* LIGHT THEME */
+  [data-theme='light']{
+    --bg: linear-gradient(180deg, #f6f8fb 0%, #eef1f4 50%, #e6eaee 100%);
+    --card: linear-gradient(180deg, #ffffff, #f8f9fb);
+    --muted:#6b7280;
+    --accent:#6d28d9;
+    --accent-2:#5b21b6;
+    --glass: rgba(2,6,23,0.04);
+    --text:#0f172a;
+    --shadow: 0 10px 30px rgba(2,6,23,0.08);
+    color-scheme: light;
+  }
+
+  *{box-sizing:border-box}
+  html,body{
+    height:100%;
+    margin:0;
+    font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
+  }
+
+  /* FIXED: use theme gradient directly */
+  body{
+    background: var(--bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px;
+    color: var(--text);
+  }
+
+  /* FIXED: theme-aware card background */
+  .app{
+    width:100%;
+    max-width:920px;
+    background: var(--card);
+    border-radius:16px;
+    padding:22px;
+    box-shadow:var(--shadow);
+    position:relative;
+  }
+
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  header h1{margin:0;font-size:1.2rem}
+  header p{margin:0;color:var(--muted);font-size:0.9rem}
+
+  .top-row{display:flex;gap:12px;margin-top:14px}
+  .new-task{flex:1;display:flex;gap:8px;align-items:center}
+
+  /* inputs/selects */
+  .new-task input[type="text"],
+  .new-task select,
+  .new-task input[type="date"]{
+    padding:10px 12px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,0.03);
+    background:var(--glass);
+    color:var(--text);
+    outline:none;
+    height:44px;
+  }
+
+  .new-task input[type="text"]{flex:1}
+
+  .btn{
+    background:linear-gradient(90deg,var(--accent),var(--accent-2));
+    border:none;
+    padding:10px 14px;
+    border-radius:10px;
+    color:white;
+    font-weight:600;
+    cursor:pointer;
+    height:44px;
+  }
+
+  .btn.ghost{
+    background:transparent;
+    border:1px solid rgba(255,255,255,0.04);
+    color:var(--text);
+  }
+  [data-theme='light'] .btn.ghost{
+    border:1px solid rgba(15,23,42,0.06);
+  }
+
+  .controls{display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:12px}
+  .filters{display:flex;gap:8px}
+  .filters button{
+    background:transparent;
+    border:1px solid rgba(255,255,255,0.03);
+    padding:8px 12px;
+    border-radius:999px;
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .filters button.active{
+    color:var(--card);
+    background:linear-gradient(90deg,var(--accent),var(--accent-2));
+    box-shadow:0 6px 18px rgba(124,58,237,0.18);
+  }
+
+  .todos{
+    margin-top:16px;
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,0.03);
+    max-height:60vh;
+    overflow:auto
+  }
+
+  .todo{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 14px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+    border-bottom:1px solid rgba(255,255,255,0.02);
+    user-select:none;
+  }
+
+  .todo:last-child{border-bottom:none}
+
+  .checkbox{
+    width:22px;height:22px;
+    border-radius:6px;
+    border:2px solid rgba(255,255,255,0.06);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer
+  }
+
+  .checkbox.checked{
+    background:linear-gradient(90deg,var(--success), #059669);
+    border:none;
+    color:white;
+  }
+
+  .title{flex:1;display:flex;flex-direction:column;gap:6px}
+  .title-row{display:flex;align-items:center;gap:12px}
+  .title span{font-size:1rem}
+  .title span.done{text-decoration:line-through;opacity:0.6;color:var(--muted)}
+  .meta{display:flex;gap:8px;align-items:center;font-size:0.85rem;color:var(--muted)}
+
+  .tag{
+    padding:4px 8px;
+    border-radius:999px;
+    background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.02)
+  }
+
+  /* BLACK priority labels */
+  .priority-low,
+  .priority-med,
+  .priority-high{
+    background:#000;
+    color:#fff;
+    padding:4px 8px;
+    border-radius:8px;
+    font-weight:600;
+    border:1px solid rgba(255,255,255,0.04);
+    display:inline-block;
+    line-height:1;
+  }
+
+  .actions{display:flex;gap:8px}
+  .icon-btn{
+    background:transparent;
+    border:none;
+    color:var(--muted);
+    cursor:pointer;
+    padding:6px;
+    border-radius:8px;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,0.02)}
+
+  .foot{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;color:var(--muted);font-size:0.95rem}
+
+  .clear{color:var(--danger);cursor:pointer}
+  .empty{padding:28px;text-align:center;color:var(--muted)}
+
+  /* Priority Select */
+  .new-task select.priority-select{
+    background:rgba(255,255,255,0.10);
+    color:var(--text);
+    border:1px solid rgba(255,255,255,0.10);
+    appearance:none;
+    padding-right:12px;
+    padding-left:12px;
+    min-width:110px;
+    height:44px;
+    border-radius:10px;
+    font-weight:600;
+  }
+
+  [data-theme='light'] .new-task select.priority-select{
+    background:var(--glass);
+    color:var(--text);
+    border:1px solid rgba(15,23,42,0.06);
+  }
+
+  .new-task select.priority-select option{
+    background:#1b1b1b;
+    color:#fff;
+  }
+  [data-theme='light'] .new-task select.priority-select option{
+    background:#f6f7f9;
+    color:#0f172a;
+  }
+
+  .new-task select.priority-select::-ms-expand{display:none}
+
+  /* Date input */
+  .new-task input[type="date"]{
+    background:var(--glass);
+    color:var(--text);
+    border:1px solid rgba(255,255,255,0.03);
+    border-radius:10px;
+    padding:10px 12px;
+    height:44px;
+    min-width:140px;
+  }
+  .new-task input[type="date"]::-webkit-datetime-edit{color:var(--text)}
+  .new-task input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer}
+
+  /* Placeholder */
+  .new-task input::placeholder{color:rgba(255,255,255,0.32)}
+  [data-theme='light'] .new-task input::placeholder{color:rgba(15,23,42,0.45)}
+
+  /* Focus */
+  :focus{outline:3px solid rgba(124,58,237,0.12)}
+  [data-theme='light'] :focus{outline:3px solid rgba(109,40,217,0.14)}
+
+  @media (max-width:520px){
+    .new-task select.priority-select,
+    .new-task input[type="date"],
+    .btn{
+      width:100%;
+      min-width:0;
+    }
+    .new-task{
+      flex-direction:column;
+      align-items:stretch;
+    }
+    .top-row{gap:8px}
+  }
+
+  /* --- TOAST styles --- */
+  .toast-container{
+    position: fixed;
+    right: 20px;
+    bottom: 28px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    z-index: 9999;
+    pointer-events: none; /* allow clicks through except on toasts */
+  }
+  .toast{
+    pointer-events: auto;
+    min-width: 220px;
+    max-width: 380px;
+    background: rgba(20,20,20,0.98);
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(2,6,23,0.5);
+    display:flex;
+    gap:10px;
+    align-items:center;
+    transform: translateY(16px);
+    opacity: 0;
+    animation: toast-in .25s ease forwards;
+    font-size: 0.95rem;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .toast--success{ background: linear-gradient(90deg,var(--success), #059669); color:#fff; border:none;}
+  .toast--danger{ background: linear-gradient(90deg,#ef4444,#dc2626); color:#fff; border:none;}
+  .toast .tmsg{ flex:1; }
+  .toast .tclose{ background: transparent; border:none; color:inherit; cursor:pointer; font-weight:700; padding:6px; border-radius:6px; }
+  @keyframes toast-in{
+    from{ transform: translateY(12px); opacity:0; }
+    to{ transform: translateY(0); opacity:1; }
+  }
+  @keyframes toast-out{
+    from{ transform: translateY(0); opacity:1; }
+    to{ transform: translateY(12px); opacity:0; }
+  }
+</style>
+</head>
+<body data-theme="dark">
+  <main class="app" role="application" aria-label="Enhanced To do list app">
+    <header>
+      <div>
+        <h1>OrganizePro</h1>
+        <p class="small">Transform the way you manage your day with simple, powerful organization.    </p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="themeToggle" class="btn ghost" title="Toggle theme">Toggle theme</button>
+        <button id="exportBtn" class="btn ghost">Export</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none">
+        <button id="importBtn" class="btn ghost">Import</button>
+      </div>
+    </header>
+
+    <div class="top-row">
+      <div class="new-task">
+        <input id="newTask" type="text" placeholder="What needs to be done? (press Enter or Add)" aria-label="New task">
+        <input id="newDate" type="date" aria-label="Due date" placeholder="dd-mm-yyyy">
+        <!-- priority select styled black only -->
+        <select id="newPriority" class="priority-select" aria-label="Priority">
+          <option value="high">High</option>
+          <option value="medium" selected>Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <button id="addBtn" class="btn">Add</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="filters" role="tablist" aria-label="Filter tasks">
+          <button class="filter-btn active" data-filter="all" role="tab" aria-selected="true">All</button>
+          <button class="filter-btn" data-filter="active" role="tab">Active</button>
+          <button class="filter-btn" data-filter="completed" role="tab">Completed</button>
+          <button class="filter-btn" data-filter="today" role="tab">Due Today</button>
+          <button class="filter-btn" data-filter="overdue" role="tab">Overdue</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="search" type="text" placeholder="Search tasks or tags" aria-label="Search tasks" style="padding:8px 10px;border-radius:10px;background:var(--glass);border:1px solid rgba(255,255,255,0.03);color:inherit">
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div id="count">0 items</div>
+        <button id="clearCompleted" class="btn ghost">Clear completed</button>
+      </div>
+    </div>
+
+    <section class="todos" id="todoList" aria-live="polite" aria-label="Tasks list">
+      <!-- tasks render here -->
+    </section>
+
+    <div class="foot">
+      <div class="small">Tip: Double-click a task to edit · Drag to reorder</div>
+    </div>
+  </main>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    // Enhanced To-Do App (single file) with toasts
+    const S = {
+      newTask: document.getElementById('newTask'),
+      newDate: document.getElementById('newDate'),
+      newPriority: document.getElementById('newPriority'),
+      addBtn: document.getElementById('addBtn'),
+      todoList: document.getElementById('todoList'),
+      filters: [...document.querySelectorAll('.filter-btn')],
+      count: document.getElementById('count'),
+      clearCompleted: document.getElementById('clearCompleted'),
+      search: document.getElementById('search'),
+      themeToggle: document.getElementById('themeToggle'),
+      exportBtn: document.getElementById('exportBtn'),
+      importBtn: document.getElementById('importBtn'),
+      importFile: document.getElementById('importFile'),
+      toastContainer: document.getElementById('toastContainer')
+    };
+
+    const STORAGE = 'todo_app_enhanced_v1';
+    let todos = []; // {id, text, done, due, priority, tags}
+    let filter = 'all';
+
+    // helpers
+    const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    const todayISO = ()=> new Date().toISOString().slice(0,10);
+
+    function save(){ localStorage.setItem(STORAGE, JSON.stringify(todos)); }
+    function load(){ try{ const v = JSON.parse(localStorage.getItem(STORAGE) || 'null'); if(Array.isArray(v)) todos = v; }catch(e){ todos = []; } }
+
+    // Toast helper
+    function showToast(message, type='info', timeout=3000){
+      const id = 't'+Date.now().toString(36);
+      const div = document.createElement('div');
+      div.className = 'toast ' + (type==='success' ? 'toast--success' : (type==='danger' ? 'toast--danger' : ''));
+      div.id = id;
+      div.innerHTML = `<div class="tmsg">${message}</div><button class="tclose" aria-label="Dismiss">✕</button>`;
+      S.toastContainer.appendChild(div);
+
+      const remove = ()=>{
+        div.style.animation = 'toast-out .18s ease forwards';
+        setTimeout(()=>{ div.remove(); }, 180);
+      };
+
+      // close button
+      div.querySelector('.tclose').addEventListener('click', remove);
+
+      // auto remove
+      setTimeout(remove, timeout);
+    }
+
+    function render(){
+      const q = S.search.value.trim().toLowerCase();
+      const now = todayISO();
+      const list = todos.filter(t=>{
+        if(filter==='active' && t.done) return false;
+        if(filter==='completed' && !t.done) return false;
+        if(filter==='today'){
+          if(!t.due) return false; if(t.due !== now) return false;
+        }
+        if(filter==='overdue'){
+          if(!t.due) return false; if(t.done) return false; if(t.due >= now) return false;
+        }
+        if(q){ if(t.text.toLowerCase().indexOf(q)===-1 && !(t.tags||[]).some(tag=>tag.toLowerCase().includes(q))) return false; }
+        return true;
+      });
+
+      S.todoList.innerHTML = '';
+      if(list.length===0){ S.todoList.innerHTML = '<div class="empty">No tasks match — add one ✨</div>'; updateCount(); return; }
+
+      list.forEach(item=>{
+        const div = document.createElement('div');
+        div.className = 'todo fade-in';
+        div.draggable = true; div.dataset.id = item.id;
+
+        const cb = document.createElement('button'); cb.className = 'checkbox' + (item.done? ' checked':''); cb.title = item.done ? 'Mark as not done':'Mark as done'; cb.setAttribute('aria-pressed', String(item.done));
+        cb.addEventListener('click', ()=> toggleDone(item.id));
+
+        const title = document.createElement('div'); title.className='title';
+        const titleRow = document.createElement('div'); titleRow.className='title-row';
+        const span = document.createElement('span'); span.textContent = item.text; if(item.done) span.classList.add('done'); span.tabIndex=0;
+        span.addEventListener('dblclick', ()=> startEdit(item.id, span));
+        span.addEventListener('keydown', (e)=>{ if(e.key==='Enter') startEdit(item.id, span); });
+
+        const meta = document.createElement('div'); meta.className='meta';
+        if(item.due){ const d = document.createElement('div'); d.textContent = `Due: ${item.due}`; meta.appendChild(d); }
+        if(item.priority){ const p = document.createElement('div'); p.textContent = item.priority.charAt(0).toUpperCase()+item.priority.slice(1); p.className = item.priority==='high'? 'priority-high' : item.priority==='low' ? 'priority-low' : 'priority-med'; meta.appendChild(p); }
+        if(item.tags && item.tags.length){ const tspan = document.createElement('div'); item.tags.slice(0,3).forEach(t=>{ const tag = document.createElement('span'); tag.className='tag'; tag.textContent = t; tspan.appendChild(tag); }); meta.appendChild(tspan); }
+
+        titleRow.appendChild(span);
+        title.appendChild(titleRow);
+        title.appendChild(meta);
+
+        const actions = document.createElement('div'); actions.className='actions';
+        const tagBtn = document.createElement('button'); tagBtn.className='icon-btn'; tagBtn.title='Add tag'; tagBtn.innerHTML='🏷️'; tagBtn.addEventListener('click', ()=> promptAddTag(item.id));
+        const editBtn = document.createElement('button'); editBtn.className='icon-btn'; editBtn.title='Edit'; editBtn.innerHTML='✏️'; editBtn.addEventListener('click', ()=> startEdit(item.id, span));
+        const delBtn = document.createElement('button'); delBtn.className='icon-btn'; delBtn.title='Delete'; delBtn.innerHTML='🗑️'; delBtn.addEventListener('click', ()=> removeTodo(item.id));
+        actions.appendChild(tagBtn); actions.appendChild(editBtn); actions.appendChild(delBtn);
+
+        div.appendChild(cb); div.appendChild(title); div.appendChild(actions);
+
+        // drag-and-drop
+        div.addEventListener('dragstart', (e)=>{ e.dataTransfer.setData('text/plain', item.id); div.classList.add('dragging'); });
+        div.addEventListener('dragend', ()=>{ div.classList.remove('dragging'); document.querySelectorAll('.todo').forEach(d=>{ d.style['border-top']=''; d.style['border-bottom']=''; }); });
+        div.addEventListener('dragover', (e)=>{ e.preventDefault(); const dragging = document.querySelector('.dragging'); if(!dragging) return; const bounding = div.getBoundingClientRect(); const offset = e.clientY - bounding.top; if(offset > bounding.height/2){ div.style['border-bottom']='2px dashed rgba(255,255,255,0.04)'; div.style['border-top']=''; } else { div.style['border-top']='2px dashed rgba(255,255,255,0.04)'; div.style['border-bottom']=''; } });
+        div.addEventListener('dragleave', ()=>{ div.style['border-bottom']=''; div.style['border-top']=''; });
+        div.addEventListener('drop', (e)=>{ e.preventDefault(); const fromId = e.dataTransfer.getData('text/plain'); const toId = item.id; if(fromId===toId) return; const fromIndex = todos.findIndex(t=>t.id===fromId); const toIndex = todos.findIndex(t=>t.id===toId); if(fromIndex<0||toIndex<0) return; const bounding = div.getBoundingClientRect(); const offset = e.clientY - bounding.top; const moved = todos.splice(fromIndex,1)[0]; let insertAt = toIndex; if(fromIndex < toIndex){ insertAt = (offset > bounding.height/2) ? toIndex : toIndex-0; } else { insertAt = (offset > bounding.height/2) ? toIndex+1 : toIndex; } todos.splice(insertAt,0,moved); save(); render(); });
+
+        S.todoList.appendChild(div);
+      });
+
+      updateCount();
+    }
+
+    function updateCount(){ const remaining = todos.filter(t=>!t.done).length; S.count.textContent = `${remaining} item${remaining!==1?'s':''} left`; }
+
+    function addTodo(text, due='', priority='medium', tags=[]){
+      const t = {id:uid(), text: text.trim(), done:false, due: due||'', priority: priority||'medium', tags: tags||[]};
+      todos.unshift(t);
+      save();
+      render();
+      // show toast for add
+      showToast('Task added successfully', 'success', 2500);
+    }
+
+    function removeTodo(id){
+      const item = todos.find(t=>t.id===id);
+      if(!item) return;
+      todos = todos.filter(t=>t.id!==id);
+      save();
+      render();
+      showToast('Task deleted', 'danger', 2500);
+    }
+
+    function toggleDone(id){ const t = todos.find(x=>x.id===id); if(!t) return; t.done = !t.done; save(); render(); }
+
+    function startEdit(id, spanEl){ const current = todos.find(t=>t.id===id); if(!current) return; const input = document.createElement('input'); input.className='edit-input'; input.value = current.text; spanEl.replaceWith(input); input.focus(); input.select(); function commit(){ const v = input.value.trim(); if(v===''){ removeTodo(id); } else { current.text = v; save(); render(); } } input.addEventListener('blur', commit); input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ input.blur(); } else if(e.key==='Escape'){ render(); } }); }
+
+    function promptAddTag(id){ const t = prompt('Add comma-separated tags (e.g. work,urgent)'); if(t===null) return; const arr = t.split(',').map(s=>s.trim()).filter(Boolean); if(arr.length){ const item = todos.find(x=>x.id===id); if(!item) return; item.tags = Array.from(new Set([...(item.tags||[]), ...arr])); save(); render(); } }
+
+    // event bindings
+    S.addBtn.addEventListener('click', ()=>{
+      const v = S.newTask.value.trim();
+      if(!v) return;
+      addTodo(v, S.newDate.value||'', S.newPriority.value, []);
+      S.newTask.value=''; S.newDate.value=''; S.newPriority.value='medium'; S.newTask.focus();
+    });
+    S.newTask.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ S.addBtn.click(); } });
+
+    S.filters.forEach(btn=>{ btn.addEventListener('click', ()=>{ S.filters.forEach(b=>{ b.classList.remove('active'); b.setAttribute('aria-selected','false'); }); btn.classList.add('active'); btn.setAttribute('aria-selected','true'); filter = btn.dataset.filter; render(); }); });
+
+    S.clearCompleted.addEventListener('click', ()=>{
+      const before = todos.length;
+      todos = todos.filter(t=>!t.done);
+      const removed = before - todos.length;
+      save();
+      render();
+      if(removed>0) showToast(`${removed} completed ${removed>1?'tasks':'task'} cleared`, 'success', 2500);
+      else showToast('No completed tasks to clear', 'info', 2000);
+    });
+
+    S.search.addEventListener('input', ()=> render());
+
+    // theme toggle
+    S.themeToggle.addEventListener('click', ()=>{ const root = document.body; const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; root.setAttribute('data-theme', next); localStorage.setItem('todo_theme',''+next); });
+
+    // export / import
+    S.exportBtn.addEventListener('click', ()=>{
+      const data = JSON.stringify(todos, null, 2);
+      const blob = new Blob([data], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'todos.json';
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      showToast('Tasks exported', 'success', 2000);
+    });
+    S.importBtn.addEventListener('click', ()=> S.importFile.click());
+    S.importFile.addEventListener('change', async (e)=>{
+      const f = e.target.files[0]; if(!f) return;
+      try{
+        const text = await f.text();
+        const parsed = JSON.parse(text);
+        if(Array.isArray(parsed)){
+          todos = parsed.map(x=>({ id: x.id||uid(), text: x.text||'', done: !!x.done, due: x.due||'', priority: x.priority||'medium', tags: x.tags||[] }));
+          save(); render();
+          showToast(`Imported ${todos.length} tasks`, 'success', 2500);
+        } else {
+          showToast('Invalid file format', 'danger', 3000);
+        }
+      }catch(err){
+        showToast('Import failed: ' + (err.message||''), 'danger', 3000);
+      }
+      e.target.value='';
+    });
+
+    // keyboard: '/' focuses search
+    document.addEventListener('keydown', (e)=>{ if(e.key==='/' && document.activeElement !== S.search){ e.preventDefault(); S.search.focus(); } });
+
+    // initialise
+    (function init(){ const storedTheme = localStorage.getItem('todo_theme'); if(storedTheme) document.body.setAttribute('data-theme', storedTheme); load(); render(); })();
+
+    // expose for debugging
+    window._todos = todos;
+  </script>
+</body>
+</html>
